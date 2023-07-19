@@ -3,24 +3,46 @@ import React, { useEffect, useState } from "react";
 import { BsInfoLg, BsPersonPlusFill } from "react-icons/bs";
 import JudgeSignNew from "../modals/JudgeSignNew";
 import dayjs from "dayjs";
+import { v4 as uuidv4 } from "uuid";
 import useSignature from "../hooks/useSignature";
 import CanvasWithImageData from "../components/CanvasWithImageData";
+import { useFirestoreAddData } from "../hooks/useFirestores";
+import ConfirmationModal from "../messageBox/ConfirmationModal";
+const initJudgeValidate = {
+  judgeName: undefined,
+  judgePassword: undefined,
+  judgePasswordCheck: true,
+  judgePromoter: undefined,
+  judgeTel: undefined,
+  judgeUserId: undefined,
+  judgeUserIdCheck: false,
+};
 
+const initJudgeInfo = {
+  judgeName: "",
+  judgePassword: "",
+  judgePasswordCheck: "",
+  judgePromoter: "",
+  judgeTel: "",
+  judgeUserId: "",
+  judgeUserIdCheck: false,
+  judgeSignature: "",
+  isConfirmed: false,
+  isActived: true,
+  isJoined: false,
+};
 const Register = () => {
-  const [judgeInfo, setJudgeInfo] = useState({});
+  const [judgeInfo, setJudgeInfo] = useState({ ...initJudgeInfo });
   const [isOpen, setIsOpen] = useState({
     sign: false,
   });
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [message, setMessage] = useState({});
   const [validate, setValidate] = useState({
-    judgeName: undefined,
-    judgePassword: undefined,
-    judgePasswordCheck: true,
-    judgePromoter: undefined,
-    judgeTel: undefined,
-    judgeUserId: undefined,
-    judgeUserIdCheck: false,
-    isConfirmed: false,
+    ...initJudgeValidate,
   });
+
+  const addJudge = useFirestoreAddData("judges_pool");
 
   const { readSignature, signCanvasRef } = useSignature();
 
@@ -32,11 +54,34 @@ const Register = () => {
     }));
   };
 
-  const handleSave = () => {
-    setJudgeInfo({
-      ...judgeInfo,
-      createdAt: dayjs().format("YYYY-MM-DD HH:mm:SS"),
-    });
+  const msgClose = () => {
+    setMsgOpen(false);
+  };
+
+  const msgConfirm = () => {
+    setJudgeInfo({ ...initJudgeInfo });
+    setValidate({ ...initJudgeValidate });
+    setMsgOpen(false);
+  };
+
+  const handleSave = async () => {
+    const judgeUid = uuidv4();
+    const createdAt = dayjs().format("YYYY-MM-DD HH:mm:ss");
+    try {
+      await addJudge
+        .addData({ ...judgeInfo, judgeUid, createdAt })
+        .then(() =>
+          setMessage({
+            body: "정상적으로 접수되었습니다.",
+            body2: "협회승인후 로그인할 수 있습니다.",
+            isButton: true,
+            confirmButtonText: "확인",
+          })
+        )
+        .then(() => setMsgOpen(true));
+    } catch (error) {
+      console.log(error);
+    }
   };
   const handleInputs = (e) => {
     const { name, value } = e.target;
@@ -121,6 +166,12 @@ const Register = () => {
           <JudgeSignNew setClose={handleSignClose} propState={isOpen} />
         </div>
       </Modal>
+      <ConfirmationModal
+        isOpen={msgOpen}
+        onConfirm={msgConfirm}
+        onCancel={msgClose}
+        message={message}
+      />
       <div
         className="flex flex-col w-full h-full bg-white rounded-lg p-3 gap-y-2 justify-start items-start"
         style={{ maxWidth: "800px" }}
