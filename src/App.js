@@ -1,18 +1,23 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import "./App.css";
-import ManagementHome from "./homes/ManagementHome";
-import Login from "./pages/Login";
+// src/App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Register from "./pages/Register";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+// 다른 페이지 컴포넌트 임포트
 
-function App() {
+const App = () => {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Register />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        {/* 다른 라우트 추가 */}
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
-}
+};
 
 export default App;

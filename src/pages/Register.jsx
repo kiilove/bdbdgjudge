@@ -1,377 +1,271 @@
-import { Modal } from "@mui/material";
-import React, { useEffect, useState } from "react";
-import { BsInfoLg, BsPersonPlusFill } from "react-icons/bs";
-import JudgeSignNew from "../modals/JudgeSignNew";
+// components/Register.js
+import React, { useState } from "react";
+import { Form, Input, Button, message, Modal } from "antd"; // Modal 임포트 추가
+import { BsPersonPlusFill } from "react-icons/bs";
+import { useFirestoreAddData, useFirestoreQuery } from "../hooks/useFirestores";
+import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { v4 as uuidv4 } from "uuid";
-import useSignature from "../hooks/useSignature";
-import CanvasWithImageData from "../components/CanvasWithImageData";
-import { useFirestoreAddData } from "../hooks/useFirestores";
-import ConfirmationModal from "../messageBox/ConfirmationModal";
-const initJudgeValidate = {
-  judgeName: undefined,
-  judgePassword: undefined,
-  judgePasswordCheck: true,
-  judgePromoter: undefined,
-  judgeTel: undefined,
-  judgeUserId: undefined,
-  judgeUserIdCheck: false,
-};
+import JudgeSignNew from "../modals/JudgeSignNew";
+import { where } from "firebase/firestore";
 
-const initJudgeInfo = {
-  judgeName: "",
-  judgePassword: "",
-  judgePasswordCheck: "",
-  judgePromoter: "",
-  judgeTel: "",
-  judgeUserId: "",
-  judgeUserIdCheck: false,
-  judgeSignature: "",
-  isConfirmed: false,
-  isActived: true,
-  isJoined: false,
-};
 const Register = () => {
-  const [judgeInfo, setJudgeInfo] = useState({ ...initJudgeInfo });
-  const [isOpen, setIsOpen] = useState({
-    sign: false,
-  });
-  const [msgOpen, setMsgOpen] = useState(false);
-  const [message, setMessage] = useState({});
-  const [validate, setValidate] = useState({
-    ...initJudgeValidate,
-  });
+  const [form] = Form.useForm();
+  const navigate = useNavigate();
+  const { addData } = useFirestoreAddData("judges_pool");
+  const { getDocuments } = useFirestoreQuery();
+  const [idUnique, setIdUnique] = useState(null); // null: 미확인, true: 유니크, false: 중복
+  const [isChecking, setIsChecking] = useState(false); // 중복 확인 중 상태
+  const [signatureData, setSignatureData] = useState(null); // 서명 데이터
 
-  const addJudge = useFirestoreAddData("judges_pool");
+  // 모달 제어 상태
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalData, setModalData] = useState(null);
 
-  const { readSignature, signCanvasRef } = useSignature();
+  const checkIdUnique = async () => {
+    const judgeUserId = form.getFieldValue("judgeUserId");
+    if (!judgeUserId || judgeUserId.length < 6) {
+      message.warning("아이디를 6자리 이상 입력해주세요.");
+      return;
+    }
 
-  const handleSignClose = () => {
-    setIsOpen(() => ({
-      sign: false,
-      title: "",
-      info: {},
-    }));
+    setIsChecking(true);
+    try {
+      const condition = [where("judgeUserId", "==", judgeUserId)];
+      const data = await getDocuments("judges_pool", condition);
+      if (data.length === 0) {
+        setIdUnique(true);
+        message.success("사용 가능한 아이디입니다.");
+      } else {
+        setIdUnique(false);
+        message.error("이미 사용 중인 아이디입니다.");
+      }
+    } catch (error) {
+      console.error("아이디 중복 확인 중 오류 발생:", error);
+      message.error("아이디 중복 확인 중 오류가 발생했습니다.");
+    } finally {
+      setIsChecking(false);
+    }
   };
 
-  const msgClose = () => {
-    setMsgOpen(false);
-  };
-
-  const msgConfirm = () => {
-    setJudgeInfo({ ...initJudgeInfo });
-    setValidate({ ...initJudgeValidate });
-    setMsgOpen(false);
-  };
-
-  const handleSave = async () => {
+  const handleRegister = async (values) => {
     const judgeUid = uuidv4();
     const createdAt = dayjs().format("YYYY-MM-DD HH:mm:ss");
+
+    if (!signatureData) {
+      message.warning("서명을 추가해주세요.");
+      return;
+    }
+
+    if (idUnique === false || idUnique === null) {
+      message.warning("아이디 중복 확인이 필요합니다.");
+      return;
+    }
+
+    const registerData = {
+      ...values,
+      judgeUid,
+      judgeSignature: signatureData,
+      createdAt,
+      isConfirmed: true,
+      isActived: true,
+      isJoined: false,
+    };
+
+    // Firestore에 데이터를 저장하지 않고 콘솔에 출력
+    console.log("등록 신청 데이터:", registerData);
+
+    // 모달 데이터 설정 및 모달 표시
+    setModalData(registerData);
+    setIsModalVisible(true);
+
+    message.success("등록 신청 데이터가 콘솔에 출력되었습니다.");
+    // 추후 Firestore에 저장하려면 아래 주석을 해제하세요.
+    /*
     try {
-      await addJudge
-        .addData({ ...judgeInfo, judgeUid, createdAt })
-        .then(() =>
-          setMessage({
-            body: "정상적으로 접수되었습니다.",
-            body2: "협회승인후 로그인할 수 있습니다.",
-            isButton: true,
-            confirmButtonText: "확인",
-          })
-        )
-        .then(() => setMsgOpen(true));
+      await addData(registerData);
+      message.success("정상적으로 등록되었습니다.");
+      navigate("/login");
     } catch (error) {
-      console.log(error);
+      console.error("등록 중 오류 발생:", error);
+      message.error("등록 중 오류가 발생했습니다.");
     }
-  };
-  const handleInputs = (e) => {
-    const { name, value } = e.target;
-    if (name !== "judgeTel") {
-      setJudgeInfo(() => ({ ...judgeInfo, [name]: value.trim().toString() }));
-      handleValidate(name, value);
-    }
-    if (name === "judgeTel") {
-      const newValue = value.replaceAll("-", "");
-      setJudgeInfo(() => ({
-        ...judgeInfo,
-        [name]: newValue.trim().toString(),
-      }));
-      handleValidate(name, value);
-    }
+    */
   };
 
-  const handleValidate = (name, value) => {
-    switch (name) {
-      case "judgeName":
-        if (value.length) {
-          setValidate(() => ({ ...validate, [name]: false }));
-        }
-        break;
-      case "judgePromoter":
-        if (value.length) {
-          setValidate(() => ({ ...validate, [name]: false }));
-        }
-        break;
-      case "judgeTel":
-        if (value.length === 11) {
-          setValidate(() => ({ ...validate, [name]: false }));
-        } else {
-          setValidate(() => ({ ...validate, [name]: true }));
-        }
-        break;
-
-      case "judgePassword":
-        if (value.length < 6) {
-          setValidate(() => ({
-            ...validate,
-            [name]: true,
-            judgePasswordCheck:
-              value === judgeInfo.judgePasswordCheck ? false : true,
-          }));
-        } else {
-          setValidate(() => ({
-            ...validate,
-            [name]: false,
-            judgePasswordCheck:
-              value === judgeInfo.judgePasswordCheck ? false : true,
-          }));
-        }
-        break;
-
-      case "judgePasswordCheck":
-        if (judgeInfo.judgePassword.toString() !== value.toString()) {
-          setValidate(() => ({ ...validate, [name]: true }));
-        } else {
-          setValidate(() => ({ ...validate, [name]: false }));
-        }
-        break;
-
-      default:
-        break;
-    }
+  const handleSignatureComplete = (data) => {
+    setSignatureData(data);
   };
 
-  useEffect(() => {
-    console.log(judgeInfo);
-  }, [judgeInfo]);
+  const handleModalOk = () => {
+    setIsModalVisible(false);
+    // Firestore에 데이터를 저장하려면 여기서 호출
+    /*
+    addData(modalData)
+      .then(() => {
+        message.success("정상적으로 등록되었습니다.");
+        navigate("/login");
+      })
+      .catch((error) => {
+        console.error("등록 중 오류 발생:", error);
+        message.error("등록 중 오류가 발생했습니다.");
+      });
+    */
+  };
+
+  const handleModalCancel = () => {
+    setIsModalVisible(false);
+    // 필요에 따라 추가 작업 수행 가능
+  };
 
   return (
-    <div className="w-full h-full min-h-screen bg-gradient-to-br from-blue-300 to-sky-700 p-2 flex justify-center">
-      <Modal open={isOpen.sign} onClose={handleSignClose}>
-        <div
-          className="flex w-full lg:w-1/3 h-screen lg:h-auto absolute top-1/2 left-1/2 lg:shadow-md lg:rounded-lg bg-white p-3"
-          style={{
-            transform: "translate(-50%, -50%)",
-          }}
-        >
-          <JudgeSignNew setClose={handleSignClose} propState={isOpen} />
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-300 to-sky-700 p-4">
+      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
+        <div className="flex items-center mb-6">
+          <BsPersonPlusFill className="text-blue-500 text-2xl mr-3" />
+          <h2 className="text-2xl font-semibold">심판등록 정보입력</h2>
         </div>
-      </Modal>
-      <ConfirmationModal
-        isOpen={msgOpen}
-        onConfirm={msgConfirm}
-        onCancel={msgClose}
-        message={message}
-      />
-      <div
-        className="flex flex-col w-full h-full bg-white rounded-lg p-3 gap-y-2 justify-start items-start"
-        style={{ maxWidth: "800px" }}
-      >
-        <div className="flex w-full h-14">
-          <div className="flex w-full bg-gray-100 justify-start items-center rounded-lg px-3">
-            <span className="font-sans text-lg font-semibold w-6 h-6 flex justify-center items-center rounded-2xl bg-blue-400 text-white mr-3">
-              <BsPersonPlusFill />
-            </span>
-            <h1
-              className="font-sans text-lg font-semibold"
-              style={{ letterSpacing: "2px" }}
-            >
-              심판등록 정보입력
-            </h1>
-          </div>
-        </div>
-        <div className="flex w-full h-full items-start">
-          <div className="flex w-full h-full justify-start items-start">
-            <div className="flex w-full h-full justify-start items-start px-3 lg:pt-0 gap-y-1 lg:gap-y-3 flex-col ">
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">이름</h3>
-                </div>
-                <div
-                  className={`${
-                    validate.judgeName !== false
-                      ? "flex w-full h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                      : "flex w-full h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                  }`}
-                >
-                  <input
-                    type="text"
-                    name="judgeName"
-                    id="judgeName"
-                    className="h-10 w-full outline-none mb-1"
-                    placeholder="실명"
-                    value={judgeInfo.judgeName}
-                    onChange={(e) => handleInputs(e)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">소속</h3>
-                </div>
-                <div
-                  className={`${
-                    validate.judgePromoter !== false
-                      ? "flex w-full h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                      : "flex w-full h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                  }`}
-                >
-                  <input
-                    type="text"
-                    name="judgePromoter"
-                    id="judgePromoter"
-                    className="h-10 w-full outline-none mb-1"
-                    placeholder="심판자격증에 기재된 소속(예:경기도)"
-                    value={judgeInfo.judgePromoter}
-                    onChange={(e) => handleInputs(e)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">휴대전화</h3>
-                </div>
-                <div
-                  className={`${
-                    validate.judgeTel !== false
-                      ? "flex w-full h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                      : "flex w-full h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                  }`}
-                >
-                  <input
-                    type="text"
-                    name="judgeTel"
-                    id="judgeTel"
-                    className="h-10 w-full outline-none mb-1"
-                    placeholder="010 포함 숫자만 입력"
-                    value={judgeInfo.judgeTel}
-                    onChange={(e) => handleInputs(e)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">사용자아이디</h3>
-                </div>
-                <div className="flex w-full lg:w-3/4">
-                  <div
-                    className={`${
-                      validate.judgeUserId !== false ||
-                      !validate.judgeUserIdCheck
-                        ? "flex w-3/4 h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 "
-                        : "flex w-3/4 h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0  "
-                    }`}
-                  >
-                    <input
-                      type="text"
-                      name="judgeUserId"
-                      id="judgeUserId"
-                      className="h-10 w-full outline-none mb-1"
-                      placeholder="영문과 숫자로 구성해주세요."
-                      value={judgeInfo.judgeUserId}
-                      autoCorrect="off"
-                      onChange={(e) => handleInputs(e)}
-                    />
-                  </div>
-                  <div className="flex w-1/4 h-12 ml-2">
-                    <button className="flex w-full h-12 justify-center items-center border-green-600 border border-b-2 border-r-2 rounded-lg  ">
-                      중복체크
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">비밀번호</h3>
-                </div>
-                <div
-                  className={`${
-                    validate.judgePassword !== false
-                      ? "flex w-full h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                      : "flex w-full h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                  }`}
-                >
-                  <input
-                    type="password"
-                    name="judgePassword"
-                    id="judgePassword"
-                    className="h-10 w-full outline-none mb-1"
-                    placeholder="보안을위해 6자리 이상 입력해주세요."
-                    value={judgeInfo.judgePassword}
-                    onChange={(e) => handleInputs(e)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">비밀번호확인</h3>
-                </div>
-                <div
-                  className={`${
-                    validate.judgePasswordCheck !== false
-                      ? "flex w-full h-12 justify-start items-center border-red-600 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                      : "flex w-full h-12 justify-start items-center border-b-gray-300 border border-b-2 border-r-2 rounded-lg px-3 mb-3 lg:mb-0 lg:w-3/4 "
-                  }`}
-                >
-                  <input
-                    type="password"
-                    name="judgePasswordCheck"
-                    id="judgePasswordCheck"
-                    className="h-10 w-full outline-none mb-1"
-                    value={judgeInfo.judgePasswordCheck}
-                    onChange={(e) => handleInputs(e)}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex px-3 w-full lg:w-1/4 justify-start lg:justify-end items-center h-12 mr-0 lg:mr-5">
-                  <h3 className="font-sans font-semibold">서명</h3>
-                </div>
-                <div className="flex w-full h-auto justify-start items-center mb-3 lg:mb-0 lg:w-3/4 flex-col">
-                  {judgeInfo.judgeSignature && (
-                    <div className="w-full h-full ">
-                      <CanvasWithImageData
-                        imageData={judgeInfo.judgeSignature}
-                      />
-                    </div>
-                  )}
-                  <button
-                    className="flex w-full h-12 justify-center items-center border-red-600 border border-b-2 border-r-2 rounded-lg  "
-                    onClick={() =>
-                      setIsOpen({
-                        ...isOpen,
-                        sign: true,
-                        state: judgeInfo,
-                        setState: setJudgeInfo,
-                      })
-                    }
-                  >
-                    서명등록하기
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-col lg:flex-row w-full">
-                <div className="flex w-full h-16 justify-start items-center mb-3 lg:mb-0 ">
-                  <button
-                    className="flex w-full h-16 justify-center items-center bg-gradient-to-r from-blue-200 to-cyan-200  "
-                    onClick={() => handleSave()}
-                  >
-                    등록신청
-                  </button>
-                </div>
-              </div>
+        <Form form={form} onFinish={handleRegister} layout="vertical">
+          <Form.Item
+            name="judgeName"
+            label="이름"
+            rules={[{ required: true, message: "이름을 입력해주세요." }]}
+          >
+            <Input placeholder="이름" />
+          </Form.Item>
+          <Form.Item
+            name="judgePromoter"
+            label="소속"
+            rules={[{ required: true, message: "소속을 입력해주세요." }]}
+          >
+            <Input placeholder="소속" />
+          </Form.Item>
+          <Form.Item
+            name="judgeTel"
+            label="휴대전화"
+            rules={[
+              {
+                required: true,
+                pattern: /^\d{11}$/,
+                message: "휴대전화는 숫자만 11자리 입력해주세요.",
+              },
+            ]}
+          >
+            <Input placeholder="01012345678" />
+          </Form.Item>
+          <Form.Item
+            name="judgeUserId"
+            label="사용자아이디"
+            rules={[
+              { required: true, min: 6, message: "6자리 이상 입력해주세요." },
+            ]}
+          >
+            <div className="flex space-x-2">
+              <Input placeholder="아이디" />
+              <Button
+                onClick={checkIdUnique}
+                className="bg-blue-500 text-white hover:bg-blue-600"
+                disabled={isChecking}
+              >
+                {isChecking ? "확인 중..." : "아이디 중복확인"}
+              </Button>
             </div>
+          </Form.Item>
+          {idUnique === true && (
+            <span className="text-green-500">사용 가능한 아이디입니다.</span>
+          )}
+          {idUnique === false && (
+            <span className="text-red-500">이미 사용 중인 아이디입니다.</span>
+          )}
+          <Form.Item
+            name="judgePassword"
+            label="비밀번호"
+            rules={[
+              { required: true, min: 6, message: "6자리 이상 입력해주세요." },
+            ]}
+          >
+            <Input.Password placeholder="비밀번호" />
+          </Form.Item>
+          <Form.Item
+            name="judgePasswordCheck"
+            label="비밀번호 확인"
+            dependencies={["judgePassword"]}
+            rules={[
+              { required: true, message: "비밀번호를 확인해주세요." },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue("judgePassword") === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(
+                    new Error("비밀번호가 일치하지 않습니다.")
+                  );
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="비밀번호 확인" />
+          </Form.Item>
+
+          {/* 서명 패드 삽입 */}
+          <div className="mb-4">
+            <JudgeSignNew onSignatureComplete={handleSignatureComplete} />
           </div>
-        </div>
+
+          <Form.Item>
+            <Button
+              htmlType="submit"
+              block
+              className={`bg-blue-500 text-white hover:bg-blue-600 ${
+                idUnique === false || idUnique === null
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={idUnique === false || idUnique === null}
+            >
+              등록신청
+            </Button>
+          </Form.Item>
+        </Form>
+
+        {/* 등록 신청 확인 모달 */}
+        <Modal
+          title="등록 신청 확인"
+          visible={isModalVisible}
+          onOk={handleModalOk}
+          onCancel={handleModalCancel}
+          okText="확인"
+          cancelButtonProps={{ style: { display: "none" } }} // 취소 버튼 숨기기
+        >
+          {modalData && (
+            <div>
+              <p>
+                <strong>이름:</strong> {modalData.judgeName}
+              </p>
+              <p>
+                <strong>소속:</strong> {modalData.judgePromoter}
+              </p>
+              <p>
+                <strong>휴대전화:</strong> {modalData.judgeTel}
+              </p>
+              <p>
+                <strong>사용자아이디:</strong> {modalData.judgeUserId}
+              </p>
+              <p>
+                <strong>비밀번호:</strong> ******
+              </p>{" "}
+              {/* 보안을 위해 마스킹 */}
+              <p>
+                <strong>서명:</strong>
+              </p>
+              <img
+                src={modalData.judgeSignature}
+                alt="Judge Signature"
+                className="w-full h-auto border"
+              />
+            </div>
+          )}
+        </Modal>
       </div>
     </div>
   );
