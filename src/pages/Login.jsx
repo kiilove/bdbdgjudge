@@ -1,67 +1,64 @@
-import React, { useState } from "react";
-import { Form, Input, Button, message } from "antd";
-import { BsGoogle } from "react-icons/bs";
-import { auth, googleProvider } from "../firebase"; // googleProvider 대신 getGoogleProvider 사용
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import React, { useState, useEffect } from "react";
+import { Form, Input, Button } from "antd";
 import { useNavigate } from "react-router-dom";
-import { useFirestoreQuery } from "../hooks/useFirestores"; // Firestore에서 추가 확인용
+import { useFirestoreQuery } from "../hooks/useFirestores";
+import { where } from "firebase/firestore";
+import { encrypter } from "../utils/encryptPassword";
 
 const Login = () => {
   const navigate = useNavigate();
   const { getDocuments } = useFirestoreQuery();
   const [loading, setLoading] = useState(false);
+  const [shake, setShake] = useState(false);
+  const [error, setError] = useState(""); // 오류 메시지 상태
 
-  const handleEmailLogin = async (values) => {
+  useEffect(() => {
+    sessionStorage.clear();
+  }, []);
+
+  const handleLogin = async (values) => {
     const { judgeUserId, judgePassword } = values;
     setLoading(true);
+    setShake(false);
+    setError("");
+
     try {
-      // Firestore에서 judgeUserId로 이메일을 확인
       const existingUser = await getDocuments("judges_pool", [
-        { where: ["judgeUserId", "==", judgeUserId] },
+        where("judgeUserId", "==", judgeUserId),
       ]);
 
       if (existingUser.length === 0) {
-        message.error("해당 아이디를 찾을 수 없습니다.");
-        setLoading(false);
+        setShake(true);
+        setError("등록된 아이디가 없습니다.");
         return;
       }
 
-      // 이메일로 Firebase 인증 처리
-      const email = existingUser[0].judgeEmail;
-      await signInWithEmailAndPassword(auth, email, judgePassword);
-      message.success("로그인에 성공했습니다!");
+      const encryptedPassword = await encrypter(judgePassword);
+
+      const user = existingUser[0];
+      if (user.judgePassword !== encryptedPassword) {
+        setShake(true);
+        setError("아이디 또는 비밀번호가 일치하지 않습니다.");
+        return;
+      }
+
+      sessionStorage.setItem(
+        "loggedInJudge",
+        JSON.stringify({
+          judgeName: user.judgeName,
+          judgeUserId: user.judgeUserId,
+          judgePromoter: user.judgePromoter,
+          judgeSignature: user.judgeSignature,
+          judgeTel: user.judgeTel,
+          judgePassword: user.judgePassword,
+          judgesPoolId: user.id,
+        })
+      );
+
       navigate("/dashboard");
     } catch (error) {
-      console.error(error);
-      message.error("로그인 실패: 아이디 또는 비밀번호를 확인해주세요.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      const googleProvider = googleProvider(); // Google Provider 객체를 동적으로 생성
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-
-      // Firestore에서 사용자가 존재하는지 확인
-      const existingUser = await getDocuments("judges_pool", [
-        { where: ["judgeUid", "==", user.uid] },
-      ]);
-
-      if (existingUser.length === 0) {
-        message.warning(
-          "등록되지 않은 계정입니다. 회원가입을 먼저 진행해주세요."
-        );
-      } else {
-        message.success("구글로 로그인 성공!");
-        navigate("/dashboard");
-      }
-    } catch (error) {
-      console.error(error);
-      message.error("구글 로그인에 실패했습니다.");
+      console.error("로그인 중 오류:", error);
+      setError("로그인 실패: 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -69,9 +66,15 @@ const Login = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-300 to-sky-700">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
-        <h2 className="text-2xl font-semibold mb-6 text-center">로그인</h2>
-        <Form onFinish={handleEmailLogin} layout="vertical">
+      <div
+        className={`bg-white p-6 rounded-lg shadow-lg w-full max-w-lg transition-transform ${
+          shake ? "transform -translate-x-4" : ""
+        }`}
+        style={{ animation: shake ? "shake 0.5s" : "none" }}
+        onAnimationEnd={() => setShake(false)}
+      >
+        <h2 className="text-2xl font-semibold mb-6 text-center">심판 로그인</h2>
+        <Form onFinish={handleLogin} layout="vertical">
           <Form.Item
             name="judgeUserId"
             label="아이디"
@@ -86,27 +89,31 @@ const Login = () => {
           >
             <Input.Password placeholder="비밀번호" />
           </Form.Item>
+
+          {error && (
+            <div className="text-red-500 text-sm mb-4 text-center">{error}</div>
+          )}
+
           <Form.Item>
-            <Button type="primary" htmlType="submit" block loading={loading}>
+            <Button
+              htmlType="submit"
+              block
+              loading={loading}
+              className="bg-blue-500 text-white py-5 text-lg hover:bg-blue-600"
+            >
               로그인
             </Button>
           </Form.Item>
         </Form>
+
+        {/* 심판 등록 신청 버튼 */}
         <Button
-          type="default"
-          icon={<BsGoogle />}
-          onClick={handleGoogleLogin}
+          onClick={() => navigate("/register")}
           block
-          loading={loading}
+          className="bg-gray-800 text-white py-5 mt-2 text-lg hover:bg-gray-600"
         >
-          구글로 로그인
+          심판 등록 신청
         </Button>
-        <div className="text-center mt-4">
-          계정이 없으신가요?{" "}
-          <a href="/register" className="text-blue-500">
-            회원가입
-          </a>
-        </div>
       </div>
     </div>
   );

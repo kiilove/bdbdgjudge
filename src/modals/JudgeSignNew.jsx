@@ -1,14 +1,13 @@
-// components/JudgeSignNew.js
 import React, { useEffect, useState } from "react";
 import useSignature from "../hooks/useSignature";
 import SignaturePad from "react-signature-pad-wrapper";
-import { AiOutlineUnlock, AiOutlineLock } from "react-icons/ai"; // 잠금/해제 아이콘 추가
+import { AiOutlineUnlock, AiOutlineLock } from "react-icons/ai";
 import { Button } from "antd";
 
-const JudgeSignNew = ({ onSignatureComplete }) => {
+const JudgeSignNew = ({ onSignatureComplete, initialSignature }) => {
   const { signCanvasRef, saveSignature, clearSignature } = useSignature();
   const [isLocked, setIsLocked] = useState(true);
-  const [hasSignature, setHasSignature] = useState(false);
+  const [hasSignature, setHasSignature] = useState(!!initialSignature);
 
   useEffect(() => {
     const resizeCanvas = () => {
@@ -21,15 +20,18 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
       }
     };
 
-    // 컴포넌트가 마운트될 때 캔버스 리사이즈
     resizeCanvas();
-
-    // 창 크기 변경 시 캔버스 리사이즈
     window.addEventListener("resize", resizeCanvas);
+
+    // 초기 서명 로드
+    if (initialSignature && signCanvasRef.current) {
+      signCanvasRef.current.fromDataURL(initialSignature);
+    }
+
     return () => {
       window.removeEventListener("resize", resizeCanvas);
     };
-  }, [signCanvasRef]);
+  }, [signCanvasRef, initialSignature]);
 
   const handleUnlock = () => {
     setIsLocked(false);
@@ -40,7 +42,7 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
       alert("서명을 입력해주세요.");
       return;
     }
-    const signatureData = saveSignature(); // 서명 데이터 저장
+    const signatureData = saveSignature();
     setIsLocked(true);
     setHasSignature(true);
     if (onSignatureComplete) {
@@ -50,7 +52,6 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
 
   const handleCancel = () => {
     clearSignature();
-    setIsLocked(true);
     setHasSignature(false);
     if (onSignatureComplete) {
       onSignatureComplete(null);
@@ -63,14 +64,14 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
 
   return (
     <div className="flex flex-col items-center gap-y-4">
-      {/* 서명 패드 영역 */}
       <div className="relative w-full h-64 border-4 border-dashed bg-yellow-50">
         <SignaturePad
           ref={signCanvasRef}
           options={{
-            minWidth: 3,
+            minWidth: 0.5,
             maxWidth: 5,
             penColor: "black",
+            throttle: 0,
           }}
           canvasProps={{
             id: "signatureCanvas",
@@ -81,7 +82,6 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
             },
           }}
         />
-        {/* 잠금 상태일 때 열쇠 아이콘 오버레이 */}
         {isLocked && (
           <div
             className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-25 cursor-pointer"
@@ -90,7 +90,6 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
             <AiOutlineUnlock size={50} color="#fff" />
           </div>
         )}
-        {/* 서명이 완료된 후 잠금 아이콘 오버레이 */}
         {hasSignature && isLocked && (
           <div className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-25 pointer-events-none">
             <AiOutlineLock size={50} color="#fff" />
@@ -98,7 +97,6 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
         )}
       </div>
 
-      {/* 서명 패드가 잠금 해제된 상태일 때 버튼들 */}
       {!isLocked && (
         <div className="flex w-full gap-x-2 px-1">
           <Button
@@ -111,12 +109,11 @@ const JudgeSignNew = ({ onSignatureComplete }) => {
             onClick={handleCancel}
             className="w-1/2 bg-gray-300 text-black hover:bg-gray-400"
           >
-            취소
+            지우기
           </Button>
         </div>
       )}
 
-      {/* 서명이 완료된 후 수정할 수 있는 버튼 */}
       {hasSignature && isLocked && (
         <div className="flex w-full gap-x-2 px-1">
           <Button

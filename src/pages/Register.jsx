@@ -1,6 +1,5 @@
-// components/Register.js
 import React, { useState } from "react";
-import { Form, Input, Button, message, Modal } from "antd"; // Modal 임포트 추가
+import { Form, Input, Button, message, Modal } from "antd";
 import { BsPersonPlusFill } from "react-icons/bs";
 import { useFirestoreAddData, useFirestoreQuery } from "../hooks/useFirestores";
 import { useNavigate } from "react-router-dom";
@@ -8,17 +7,17 @@ import dayjs from "dayjs";
 import { v4 as uuidv4 } from "uuid";
 import JudgeSignNew from "../modals/JudgeSignNew";
 import { where } from "firebase/firestore";
+import { encrypter } from "../utils/encryptPassword"; // 암호화 함수 임포트
 
 const Register = () => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
   const { addData } = useFirestoreAddData("judges_pool");
   const { getDocuments } = useFirestoreQuery();
-  const [idUnique, setIdUnique] = useState(null); // null: 미확인, true: 유니크, false: 중복
-  const [isChecking, setIsChecking] = useState(false); // 중복 확인 중 상태
-  const [signatureData, setSignatureData] = useState(null); // 서명 데이터
-
-  // 모달 제어 상태
+  const [idUnique, setIdUnique] = useState(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signatureData, setSignatureData] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalData, setModalData] = useState(null);
 
@@ -62,9 +61,14 @@ const Register = () => {
       return;
     }
 
+    // 비밀번호 암호화
+    const encryptedPassword = await encrypter(values.judgePassword);
+
     const registerData = {
       ...values,
       judgeUid,
+      judgePassword: encryptedPassword, // 암호화된 비밀번호 저장
+      judgePasswordCheck: encryptedPassword,
       judgeSignature: signatureData,
       createdAt,
       isConfirmed: true,
@@ -97,20 +101,19 @@ const Register = () => {
     setSignatureData(data);
   };
 
-  const handleModalOk = () => {
-    setIsModalVisible(false);
-    // Firestore에 데이터를 저장하려면 여기서 호출
-    /*
-    addData(modalData)
-      .then(() => {
-        message.success("정상적으로 등록되었습니다.");
-        navigate("/login");
-      })
-      .catch((error) => {
-        console.error("등록 중 오류 발생:", error);
-        message.error("등록 중 오류가 발생했습니다.");
-      });
-    */
+  const handleModalOk = async () => {
+    setIsSubmitting(true); // 제출 중 상태를 true로 설정
+    try {
+      await addData(modalData);
+      message.success("정상적으로 등록되었습니다.");
+      setIsModalVisible(false); // 모달을 닫은 후
+      navigate("/login"); // 로그인 페이지로 이동
+    } catch (error) {
+      console.error("등록 중 오류 발생:", error);
+      message.error("등록 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false); // 제출 중 상태를 false로 설정하여 버튼 활성화
+    }
   };
 
   const handleModalCancel = () => {
@@ -234,8 +237,15 @@ const Register = () => {
           visible={isModalVisible}
           onOk={handleModalOk}
           onCancel={handleModalCancel}
-          okText="확인"
-          cancelButtonProps={{ style: { display: "none" } }} // 취소 버튼 숨기기
+          okText="등록"
+          okButtonProps={{
+            style: {
+              backgroundColor: "#1D4ED8", // 파랑색 배경
+              borderColor: "#1D4ED8", // 파랑색 테두리
+              color: "#ffffff", // 흰색 텍스트
+            },
+          }}
+          cancelButtonProps={{ style: { display: "none" } }}
         >
           {modalData && (
             <div>
@@ -251,10 +261,6 @@ const Register = () => {
               <p>
                 <strong>사용자아이디:</strong> {modalData.judgeUserId}
               </p>
-              <p>
-                <strong>비밀번호:</strong> ******
-              </p>{" "}
-              {/* 보안을 위해 마스킹 */}
               <p>
                 <strong>서명:</strong>
               </p>

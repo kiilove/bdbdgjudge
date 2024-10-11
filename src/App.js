@@ -1,20 +1,44 @@
-// src/App.jsx
+// App.js
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-// 다른 페이지 컴포넌트 임포트
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminLogin from "./pages/AdminLogin";
+import JudgeInfoEdit from "./pages/JudgeInfoEdit";
+import ProtectedRoute from "./components/ProtectedRoute";
+import useFirebaseAuth from "./hooks/useFireAuth";
 
 const App = () => {
+  const { currentUser } = useFirebaseAuth();
+
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Register />} />
+        <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        {/* 다른 라우트 추가 */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute
+              currentUser={currentUser}
+              element={<AdminDashboard />}
+            />
+          }
+        />
+        <Route path="/admin-login" element={<AdminLogin />} />
+        <Route
+          path="/judgeInfoEdit"
+          element={
+            <ProtectedRoute
+              currentUser={currentUser}
+              element={<JudgeInfoEdit />}
+            />
+          }
+        />
       </Routes>
     </Router>
   );
