@@ -77,13 +77,13 @@ const Register = () => {
     };
 
     // Firestore에 데이터를 저장하지 않고 콘솔에 출력
-    console.log("등록 신청 데이터:", registerData);
+    // /console.log("등록 신청 데이터:", registerData);
 
     // 모달 데이터 설정 및 모달 표시
     setModalData(registerData);
     setIsModalVisible(true);
 
-    message.success("등록 신청 데이터가 콘솔에 출력되었습니다.");
+    //message.success("등록 신청 데이터가 콘솔에 출력되었습니다.");
     // 추후 Firestore에 저장하려면 아래 주석을 해제하세요.
     /*
     try {

@@ -29,7 +29,11 @@ const JudgeInfoEdit = () => {
 
   const handleSave = async (values) => {
     try {
-      const updatedData = { ...values, judgeSignature: signatureData };
+      const updatedData = {
+        ...judgeInfo,
+        ...values,
+        judgeSignature: signatureData,
+      };
       await updateData(judgeInfo.judgesPoolId, updatedData);
 
       message.success("정보가 성공적으로 수정되었습니다.");
@@ -101,6 +105,15 @@ const JudgeInfoEdit = () => {
                 저장
               </Button>
             </Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              className="bg-red-500 text-white"
+              onClick={() => navigate("/dashboard")}
+            >
+              쥐소
+            </Button>
           </Form>
         )}
       </div>

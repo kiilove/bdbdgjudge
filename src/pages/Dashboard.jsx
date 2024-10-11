@@ -20,12 +20,14 @@ const Dashboard = () => {
   }, []);
 
   const handleEditClick = () => {
+    setPassword((prev) => (prev = ""));
     setIsModalVisible(true);
   };
 
   const handlePasswordCheck = async () => {
     if (judgeInfo) {
       const encryptedPassword = await encrypter(password);
+      console.log(judgeInfo.judgePassword);
       if (encryptedPassword === judgeInfo.judgePassword) {
         setIsModalVisible(false);
         navigate("/judgeInfoEdit");

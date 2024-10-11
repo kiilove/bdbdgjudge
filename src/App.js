@@ -30,15 +30,7 @@ const App = () => {
           }
         />
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route
-          path="/judgeInfoEdit"
-          element={
-            <ProtectedRoute
-              currentUser={currentUser}
-              element={<JudgeInfoEdit />}
-            />
-          }
-        />
+        <Route path="/judgeInfoEdit" element={<JudgeInfoEdit />} />
       </Routes>
     </Router>
   );
